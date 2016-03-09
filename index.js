@@ -1,35 +1,36 @@
 //=======================================
 //数据
 
-//# 商品库
+//# 条码字典
 //
-var products = [{
-    name: '羽毛球',
-    unit: '个',
-    code: 'ITEM000001',
-    price: '1',
-    category: 'sport'
-}, {
-    name: '可乐',
-    unit: '瓶',
-    code: 'ITEM000005',
-    price: '3',
-    category: 'drink'
-}, {
-    name: '苹果',
-    unit: '斤',
-    code: 'ITEM000003',
-    price: '5.5',
-    category: 'fruit'
-}];
+var codeDict = {
+    'ITEM000001': {
+        name: '羽毛球',
+        unit: '个',
+        price: '1',
+        category: 'sport'
+    },
+    'ITEM000005': {
+        name: '可乐',
+        unit: '瓶',
+        price: '3',
+        category: 'drink'
+    },
+    'ITEM000003': {
+        name: '苹果',
+        unit: '斤',
+        price: '5.5',
+        category: 'fruit'
+    }
+};
 
 
 //# 折扣优惠
 //
-var discountList = ['ITEM000003'];
+var discountList = [];
 
 //# 买二送一优惠
-var presentList = ['ITEM000001','ITEM000005'];
+var presentList = [];
 
 //# 购买商品
 //
@@ -52,43 +53,53 @@ Array.prototype.contains = function(item) {
 };
 
 (function() {
-    //# 根据条码得到产品
+    //# 根据条码得到产品信息
     //
     var getProductByCode = function(code) {
-        var product;
-        products.forEach(function(item) {
-            if (code == item.code) {
-                product = item;
-            }
-        });
-        return product;
+        if (codeDict[code]) {
+            return codeDict[code];
+        } else {
+            throw new Error(code + '条码信息不能识别');
+        }
+
     };
 
-
-    //# 生成购买信息
+    //# 初始化购买项
     //
-    var generateBuyInfo = function(code, count) {
-        var buyInfo = getProductByCode(code);
-        buyInfo['count'] = count;
-        return buyInfo;
+    var initBuyItem = function(code, count) {
+        var buyItem = codeDict[code];
+        if (buyItem) {
+            buyItem['count'] = count;
+            return buyItem;
+        } else {
+            throw new Error('购买项初始化失败:' + code + '条码信息不能识别');
+        }
     }
 
-    //＃ 生成购买列表
+    //＃ 生成总的购买列表
     //
     var buyList = {};
     codeList.forEach(function(code) {
         if (code.indexOf('-') == -1) {
             if (!buyList[code]) {
-                buyList[code] = generateBuyInfo(code, 1);
+                try {
+                    buyList[code] = initBuyItem(code, 1);
+                } catch (error) {
+                    console.error(error.message);
+                }
             } else {
-                buyList[code].count += 1;
+                buyList[code].count++;
             }
         } else {
             var splitArr = code.split('-');
             if (!buyList[splitArr[0]]) {
-                buyList[splitArr[0]] = generateBuyInfo(splitArr[0], splitArr[1]);
+                try {
+                    buyList[splitArr[0]] = initBuyItem(splitArr[0], splitArr[1]);
+                } catch (error) {
+                    console.error(error.message);
+                }
             } else {
-                buyList[splitArr[0]].count += splitArr[1];
+                buyList[splitArr[0]].count += parseInt(splitArr[1]);
             }
         }
     });
@@ -103,15 +114,22 @@ Array.prototype.contains = function(item) {
     var buyPresentList = [];
     presentList.forEach(function(code) {
         if (buyList[code] && buyList[code].count >= 3) {
-            var product = buyList[code];
-            product.presentCount = Math.floor(product.count / 3);
-            product.totalPrice = ((product.count - Math.floor(product.count / 3)) * product.price).toFixed(2);
-            product.saveUp = (Math.floor(product.count / 3) * product.price).toFixed(2);
+            var buyItem;
+            try {
+                buyItem = buyList[code]
+            } catch (error) {
+                console.error(error.message);
+                return;
+            }
+            buyItem.presentCount = Math.floor(buyItem.count / 3);
+            buyItem.totalPrice = ((buyItem.count - Math.floor(buyItem.count / 3)) * buyItem.price).toFixed(2);
+            buyItem.saveUp = (Math.floor(buyItem.count / 3) * buyItem.price).toFixed(2);
+            buyItem.type = 'PRESENT';
 
-            allPrice += parseFloat(product.totalPrice);
-            allSaveUp += parseFloat(product.saveUp);
+            allPrice += parseFloat(buyItem.totalPrice);
+            allSaveUp += parseFloat(buyItem.saveUp);
 
-            buyPresentList.push(product);
+            buyPresentList.push(buyItem);
             delete buyList[code];
         }
     });
@@ -121,11 +139,19 @@ Array.prototype.contains = function(item) {
     var buyDiscountList = [];
     discountList.forEach(function(code) {
         if (buyList[code]) {
-            var product = buyList[code];
-            product.totalPrice = (product.count * product.price * 0.95).toFixed(2);
-            product.saveUp = (product.count * product.price * 0.05).toFixed(2);
-            allPrice += parseFloat(product.totalPrice);
-            allSaveUp += parseFloat(product.saveUp);
+            var buyItem;
+            try {
+                buyItem = buyList[code]
+            } catch (error) {
+                console.error(error.message);
+                return;
+            }
+            buyItem.totalPrice = (buyItem.count * buyItem.price * 0.95).toFixed(2);
+            buyItem.saveUp = (buyItem.count * buyItem.price * 0.05).toFixed(2);
+            buyItem.type = 'DISCOUNT';
+
+            allPrice += parseFloat(buyItem.totalPrice);
+            allSaveUp += parseFloat(buyItem.saveUp);
             buyDiscountList.push(buyList[code]);
             delete buyList[code];
         }
@@ -135,25 +161,50 @@ Array.prototype.contains = function(item) {
     //
     var buyNormalList = [];
     for (code in buyList) {
-        var product = buyList[code];
-        product.totalPrice = (product.count * product.price).toFixed(2);
-        allPrice += parseFloat(product.totalPrice);
-        buyNormalList.push(product);
+        var buyItem;
+        try {
+            buyItem = buyList[code]
+        } catch (error) {
+            console.error(error.message);
+            return;
+        }
+        buyItem.totalPrice = (buyItem.count * buyItem.price).toFixed(2);
+        buyItem.type = 'NORMAL';
+
+        allPrice += parseFloat(buyItem.totalPrice);
+        buyNormalList.push(buyItem);
+    }
+
+    //# 打印购买项
+    //
+    var printItem = function(buyItem) {
+        if (buyItem.type.toUpperCase() == 'DISCOUNT') { // 如果buyitem类型为discount时，输出节省金额
+            console.info('名称：' + buyItem.name +
+                '，数量：' + (buyItem.count + buyItem.unit) +
+                '，单价：' + buyItem.price +
+                '(元)，小计：' + buyItem.totalPrice +
+                '(元)，节省' + buyItem.saveUp + '(元)')
+        } else {
+            console.info('名称：' + buyItem.name +
+                '，数量：' + (buyItem.count + buyItem.unit) +
+                '，单价：' + buyItem.price +
+                '(元)，小计：' + buyItem.totalPrice +
+                '(元)');
+        }
     }
 
 
     //# 打印收银条
     //
     console.info('***<没钱赚商店>购物清单***');
-    buyPresentList.forEach(function(product) {
-        console.info('名称：' + product.name + '，数量：' + (product.count + product.unit) + '，单价：' + product.price + '(元)，小计：' + product.totalPrice + '(元)');
+    buyPresentList.forEach(function(item) {
+        printItem(item);
     });
-    buyDiscountList.forEach(function(product) {
-        console.info('名称：' + product.name + '，数量：' + (product.count + product.unit) + '，单价：' + product.price + '(元)，小计：' + product.totalPrice + '(元)，节省' + product.saveUp + '(元)');
-
+    buyDiscountList.forEach(function(item) {
+        printItem(item);
     });
-    buyNormalList.forEach(function(product) {
-        console.info('名称：' + product.name + '，数量：' + (product.count + product.unit) + '，单价：' + product.price + '(元)，小计：' + product.totalPrice + '(元)');
+    buyNormalList.forEach(function(item) {
+        printItem(item);
     });
     console.info('----------------------');
     if (buyPresentList.length > 0) {
@@ -163,9 +214,9 @@ Array.prototype.contains = function(item) {
         });
         console.info('----------------------');
     }
-    console.log('总计:' + allPrice.toFixed(2) + '元');
+    console.info('总计:' + allPrice.toFixed(2) + '元');
     if (allSaveUp > 0) {
-        console.log('节省:' + allSaveUp.toFixed(2) + '元');
+        console.info('节省:' + allSaveUp.toFixed(2) + '元');
     }
     console.info('**********************');
 
